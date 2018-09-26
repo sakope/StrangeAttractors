@@ -1,0 +1,53 @@
+﻿#pragma kernel Emit
+#pragma kernel Iterator
+
+#define THREAD_X 128
+#define THREAD_Y 1
+#define THREAD_Z 1
+#define DT 0.01
+
+struct Params
+{
+    float3 emitPos;
+    float3 position;
+    float3 velocity; //xyz = velocity
+    float  life;
+    float2 size;     // x = current size, y = target size.
+    float4 color;
+};
+            
+RWStructuredBuffer<Params> buf;
+
+// Japanese Attractor parameters
+float k;
+float b;
+
+float3 JapaneseAttractor(float3 pos, float time)
+{
+    float dxdt = pos.y;
+    float dydt = -k*pos.y - pow(pos.x, 3) + b * cos(time);
+    return float3(dxdt, dydt, 0.0) * DT;
+}
+
+[numthreads(THREAD_X, THREAD_Y, THREAD_Z)]
+void Emit(uint id : SV_DispatchThreadID)
+{
+    Params p = buf[id];
+    p.life = (float)id*-1e-05;
+    p.position = p.emitPos;
+    p.size.x = p.size.y;
+    buf[id] = p;
+}
+
+[numthreads(THREAD_X, THREAD_Y, THREAD_Z)]
+void Iterator(uint id : SV_DispatchThreadID)
+{
+    Params p = buf[id];
+    p.life.x += DT;
+    if (p.life.x > 0)
+    {
+        p.velocity = JapaneseAttractor(p.position, p.life);
+        p.position += p.velocity;
+    }
+    buf[id] = p;
+}
